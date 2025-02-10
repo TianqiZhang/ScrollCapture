@@ -43,9 +43,27 @@ async function convertToPDF(dataUrl) {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, sender) => {
+// Background script for handling screenshot capture and saving
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Background received message:', message);
+
+  if (message.action === 'captureTab') {
+    console.log('Capturing tab with bounds:', message.bounds);
+    chrome.tabs.captureVisibleTab(null, { format: 'png' }, (dataUrl) => {
+      if (chrome.runtime.lastError) {
+        console.error('Capture failed:', chrome.runtime.lastError);
+        sendResponse({ error: chrome.runtime.lastError.message });
+        return;
+      }
+      console.log('Tab captured successfully');
+      sendResponse({ dataUrl });
+    });
+    return true; // Keep message channel open for async response
+  }
+  
   if (message.action === 'saveScreenshot') {
     const { dataUrl, format } = message;
+    console.log('Saving screenshot in format:', format);
     
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const extension = format.toLowerCase();
@@ -95,14 +113,17 @@ chrome.runtime.onMessage.addListener((message, sender) => {
         }
       }
     })();
-  } else if (message.action === 'captureError') {
+    return true;
+  }
+  
+  if (message.action === 'captureError') {
+    console.error('Capture error:', message.error);
     chrome.notifications.create({
       type: 'basic',
       iconUrl: 'icon128.png',
       title: 'Screenshot Error',
       message: message.error || 'Failed to capture screenshot'
     });
+    return true;
   }
-  
-  return true;
 });

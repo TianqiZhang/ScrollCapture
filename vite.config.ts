@@ -3,61 +3,76 @@ import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 import fs from 'fs';
 
-export default defineConfig({
-  plugins: [
-    react(),
-    {
-      name: 'post-build',
-      closeBundle: async () => {
-        // Create dist directory if it doesn't exist
-        if (!fs.existsSync('dist')) {
-          fs.mkdirSync('dist', { recursive: true });
-        }
-
-        // Copy manifest and icon to dist
-        fs.copyFileSync('public/manifest.json', 'dist/manifest.json');
-        fs.copyFileSync('public/icon.svg', 'dist/icon.svg');
-        
-        // Copy and rename index.html to popup.html
-        fs.copyFileSync('dist/index.html', 'dist/popup.html');
-        
-        // Move CSS file to correct location
-        if (fs.existsSync('dist/assets/contentStyle.css')) {
-          fs.renameSync('dist/assets/contentStyle.css', 'dist/content.css');
-        }
-
-        // Create icons directory
-        if (!fs.existsSync('dist/icons')) {
-          fs.mkdirSync('dist/icons', { recursive: true });
-        }
-      }
-    }
-  ],
-  build: {
-    outDir: 'dist',
-    emptyOutDir: true,
-    rollupOptions: {
-      input: {
-        popup: resolve(__dirname, 'index.html'),
-        content: resolve(__dirname, 'src/content.ts'),
-        background: resolve(__dirname, 'src/background.ts'),
-        contentStyle: resolve(__dirname, 'src/content.css')
-      },
-      output: [
+// Helper to determine which part to build
+const getConfig = (mode) => {
+  if (mode === 'popup') {
+    return {
+      plugins: [
+        react(),
         {
-          // ES module build for content script and popup
-          entryFileNames: '[name].js',
-          chunkFileNames: 'assets/[name].[hash].js',
-          format: 'es',
-          assetFileNames: (assetInfo) => {
-            if (assetInfo.name === 'style.css') {
-              return 'assets/[name].[ext]';
+          name: 'post-build',
+          writeBundle: async () => {
+            // Create dist directory if it doesn't exist
+            if (!fs.existsSync('dist')) {
+              fs.mkdirSync('dist', { recursive: true });
             }
-            return 'assets/[name].[ext]';
+
+            // Copy manifest and icon to dist
+            fs.copyFileSync('public/manifest.json', 'dist/manifest.json');
+            fs.copyFileSync('public/icon.svg', 'dist/icon.svg');
+            
+            // Copy and rename index.html to popup.html
+            if (fs.existsSync('dist/index.html')) {
+              fs.copyFileSync('dist/index.html', 'dist/popup.html');
+            }
+
+            // Create icons directory
+            if (!fs.existsSync('dist/icons')) {
+              fs.mkdirSync('dist/icons', { recursive: true });
+            }
           }
         }
-      ]
-    },
-    target: 'esnext'
+      ],
+      build: {
+        outDir: 'dist',
+        emptyOutDir: true,
+        rollupOptions: {
+          input: {
+            popup: resolve(__dirname, 'index.html')
+          }
+        }
+      }
+    };
+  } else if (mode === 'content') {
+    return {
+      build: {
+        outDir: 'dist',
+        emptyOutDir: false,
+        lib: {
+          entry: resolve(__dirname, 'src/content.ts'),
+          name: 'content',
+          formats: ['iife'],
+          fileName: () => 'content.js'
+        }
+      }
+    };
+  } else if (mode === 'background') {
+    return {
+      build: {
+        outDir: 'dist',
+        emptyOutDir: false,
+        lib: {
+          entry: resolve(__dirname, 'src/background.ts'),
+          name: 'background',
+          formats: ['iife'],
+          fileName: () => 'background.js'
+        }
+      }
+    };
   }
-});
+
+  // Default to popup config
+  return getConfig('popup');
+};
+
+export default defineConfig(({ mode }) => getConfig(mode));

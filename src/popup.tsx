@@ -9,11 +9,13 @@ function Popup() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tab?.id) {
+        console.log('Sending startCapture message to tab:', tab.id);
         await chrome.tabs.sendMessage(tab.id, { 
           action: 'startCapture', 
           settings: { quality, format } 
         });
-        window.close();
+        console.log('Message sent, closing popup');
+        setTimeout(() => window.close(), 100); // Small delay to ensure message is sent
       }
     } catch (err) {
       console.error('Failed to start capture:', err);

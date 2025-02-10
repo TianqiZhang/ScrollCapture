@@ -1,12 +1,6 @@
-import html2canvas from 'html2canvas';
-
-interface CaptureFrame {
-  dataUrl: string;
-  position: { x: number; y: number };
-}
-
+// Content script for screenshot capture functionality
 class ScreenshotCapture {
-  private frames: CaptureFrame[] = [];
+  private frames: Array<{dataUrl: string; position: {x: number; y: number}}> = [];
   private isCapturing = false;
   private selection: { x: number; y: number; width: number; height: number } | null = null;
   private overlay: HTMLDivElement | null = null;
@@ -14,221 +8,159 @@ class ScreenshotCapture {
   private progressBar: HTMLDivElement | null = null;
 
   constructor() {
+    console.log('ScreenshotCapture initialized');
     this.initializeOverlay();
     this.setupEventListeners();
   }
 
   private initializeOverlay() {
+    // Create overlay
     this.overlay = document.createElement('div');
     this.overlay.className = 'screenshot-overlay';
-    this.overlay.style.display = 'none';
     document.body.appendChild(this.overlay);
 
+    // Create selection box
     this.selectionBox = document.createElement('div');
     this.selectionBox.className = 'screenshot-selection';
     this.overlay.appendChild(this.selectionBox);
 
-    // Add progress bar
+    // Create progress bar
     this.progressBar = document.createElement('div');
     this.progressBar.className = 'screenshot-progress';
     this.progressBar.style.display = 'none';
     document.body.appendChild(this.progressBar);
-  }
 
-  private updateProgress(percent: number) {
-    if (this.progressBar) {
-      this.progressBar.style.display = 'block';
-      this.progressBar.style.width = `${percent}%`;
-      this.progressBar.textContent = `Capturing: ${Math.round(percent)}%`;
-    }
+    console.log('Overlay elements created');
   }
 
   private setupEventListeners() {
+    if (!this.overlay || !this.selectionBox) return;
+
     let isSelecting = false;
     let startX = 0;
     let startY = 0;
 
-    this.overlay?.addEventListener('mousedown', (e) => {
+    this.overlay.addEventListener('mousedown', (e) => {
+      console.log('Mouse down on overlay');
       isSelecting = true;
       startX = e.clientX;
       startY = e.clientY;
-      if (this.selectionBox) {
-        this.selectionBox.style.left = `${startX}px`;
-        this.selectionBox.style.top = `${startY}px`;
-        this.selectionBox.style.width = '0';
-        this.selectionBox.style.height = '0';
-      }
+      
+      this.selectionBox!.style.left = `${startX}px`;
+      this.selectionBox!.style.top = `${startY}px`;
+      this.selectionBox!.style.width = '0';
+      this.selectionBox!.style.height = '0';
+      this.selectionBox!.style.display = 'block';
     });
 
-    this.overlay?.addEventListener('mousemove', (e) => {
+    this.overlay.addEventListener('mousemove', (e) => {
       if (!isSelecting) return;
 
-      const currentX = e.clientX;
-      const currentY = e.clientY;
-      const width = currentX - startX;
-      const height = currentY - startY;
+      const width = e.clientX - startX;
+      const height = e.clientY - startY;
 
-      if (this.selectionBox) {
-        this.selectionBox.style.width = `${Math.abs(width)}px`;
-        this.selectionBox.style.height = `${Math.abs(height)}px`;
-        this.selectionBox.style.left = `${width > 0 ? startX : currentX}px`;
-        this.selectionBox.style.top = `${height > 0 ? startY : currentY}px`;
-      }
+      this.selectionBox!.style.width = `${Math.abs(width)}px`;
+      this.selectionBox!.style.height = `${Math.abs(height)}px`;
+      this.selectionBox!.style.left = `${width > 0 ? startX : e.clientX}px`;
+      this.selectionBox!.style.top = `${height > 0 ? startY : e.clientY}px`;
     });
 
-    this.overlay?.addEventListener('mouseup', () => {
+    this.overlay.addEventListener('mouseup', () => {
+      console.log('Mouse up, ending selection');
       isSelecting = false;
-      if (this.selectionBox) {
-        const rect = this.selectionBox.getBoundingClientRect();
-        this.selection = {
-          x: rect.left,
-          y: rect.top,
-          width: rect.width,
-          height: rect.height
-        };
-        this.startCapture();
-      }
+      const rect = this.selectionBox!.getBoundingClientRect();
+      this.selection = {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height
+      };
+      this.startCapture();
     });
-  }
-
-  private async captureFrame(): Promise<CaptureFrame> {
-    if (!this.selection) throw new Error('No selection area defined');
-
-    // Calculate the area to capture
-    const targetElement = document.documentElement;
-    const scale = window.devicePixelRatio;
-    
-    const canvas = await html2canvas(targetElement, {
-      scale,
-      windowWidth: targetElement.scrollWidth,
-      windowHeight: targetElement.scrollHeight,
-      x: this.selection.x,
-      y: this.selection.y,
-      width: this.selection.width,
-      height: this.selection.height,
-      logging: false,
-      useCORS: true,
-      allowTaint: true
-    });
-
-    return {
-      dataUrl: canvas.toDataURL(),
-      position: { 
-        x: window.scrollX + this.selection.x,
-        y: window.scrollY + this.selection.y 
-      }
-    };
   }
 
   private async startCapture() {
-    this.isCapturing = true;
-    this.frames = [];
-    
+    console.log('Starting capture process');
+    if (!this.selection) return;
+
     try {
-      if (!this.selection) throw new Error('No selection area defined');
+      // Request background script to handle the capture since it has the required permissions
+      chrome.runtime.sendMessage({
+        action: 'captureTab',
+        bounds: this.selection
+      }, async (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Capture failed:', chrome.runtime.lastError);
+          return;
+        }
+        
+        if (response && response.dataUrl) {
+          // Process the captured image
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = this.selection!.width;
+            canvas.height = this.selection!.height;
+            const ctx = canvas.getContext('2d');
+            
+            ctx!.drawImage(
+              img,
+              this.selection!.x, this.selection!.y,
+              this.selection!.width, this.selection!.height,
+              0, 0,
+              this.selection!.width, this.selection!.height
+            );
 
-      const totalHeight = document.documentElement.scrollHeight;
-      const viewportHeight = window.innerHeight;
-      let currentScroll = 0;
-
-      while (currentScroll < totalHeight && this.isCapturing) {
-        const progress = (currentScroll / totalHeight) * 100;
-        this.updateProgress(progress);
-
-        const frame = await this.captureFrame();
-        this.frames.push(frame);
-
-        currentScroll += viewportHeight;
-        window.scrollTo(0, currentScroll);
-
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
-
-      this.updateProgress(100);
-      await this.stitchFrames();
+            // Send the cropped image back to background script for saving
+            chrome.runtime.sendMessage({
+              action: 'saveScreenshot',
+              dataUrl: canvas.toDataURL(),
+              format: 'png'
+            });
+          };
+          img.src = response.dataUrl;
+        }
+      });
     } catch (err) {
       console.error('Capture failed:', err);
       chrome.runtime.sendMessage({
         action: 'captureError',
-        error: err instanceof Error ? err.message : 'Unknown error occurred'
+        error: err instanceof Error ? err.message : 'Unknown error'
       });
     } finally {
       this.cleanup();
     }
   }
 
-  private async stitchFrames() {
-    if (this.frames.length === 0) return;
-
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d')!;
-    const scale = window.devicePixelRatio;
-
-    // Calculate final dimensions
-    const maxWidth = Math.max(...this.frames.map(f => f.position.x + this.selection!.width));
-    const maxHeight = Math.max(...this.frames.map(f => f.position.y + this.selection!.height));
-
-    canvas.width = maxWidth * scale;
-    canvas.height = maxHeight * scale;
-    context.scale(scale, scale);
-
-    // Draw frames in order
-    for (const frame of this.frames) {
-      const img = new Image();
-      img.src = frame.dataUrl;
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = () => reject(new Error('Failed to load frame'));
-      });
-      
-      context.drawImage(
-        img,
-        frame.position.x,
-        frame.position.y,
-        this.selection!.width,
-        this.selection!.height
-      );
-    }
-
-    // Send final image to background script
-    chrome.runtime.sendMessage({
-      action: 'saveScreenshot',
-      dataUrl: canvas.toDataURL(),
-      format: 'png' // Default format
-    });
-  }
-
   private cleanup() {
-    this.isCapturing = false;
+    console.log('Cleaning up capture UI');
     if (this.overlay) {
       this.overlay.style.display = 'none';
     }
     if (this.progressBar) {
       this.progressBar.style.display = 'none';
     }
-    window.scrollTo(0, 0);
+    this.selection = null;
   }
 
   public start() {
+    console.log('Starting screenshot capture UI');
     if (this.overlay) {
       this.overlay.style.display = 'block';
     }
   }
-
-  public stop() {
-    this.isCapturing = false;
-    if (this.overlay) {
-      this.overlay.style.display = 'none';
-    }
-  }
 }
 
-// Initialize capture functionality
+// Initialize capture functionality when script loads
+console.log('Content script loaded');
 const screenshotCapture = new ScreenshotCapture();
 
 // Listen for messages from popup
-chrome.runtime.onMessage.addListener((message) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('Received message:', message);
   if (message.action === 'startCapture') {
     screenshotCapture.start();
+    sendResponse({ success: true });
   }
+  return true;
 });
