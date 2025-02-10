@@ -1,38 +1,20 @@
 {
   "manifest_version": 3,
-  "name": "Advanced Screenshot Capture",
-  "version": "1.0.0",
-  "description": "Capture advanced screenshots with scrolling and stitching support",
-  "permissions": [
-    "activeTab",
-    "scripting",
-    "storage",
-    "downloads"
-  ],
+  "name": "ScrollCapture",
+  "version": "1.0",
+  "description": "Advanced scrolling screenshot capture extension",
+  "permissions": ["activeTab", "scripting", "storage"],
   "action": {
-    "default_popup": "index.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
+    "default_popup": "index.html"
   },
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "128": "icon.svg"
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
-    "js": ["content.js"],
-    "css": ["content.css"]
-  }],
-  "commands": {
-    "_execute_action": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+S",
-        "mac": "Command+Shift+S"
-      },
-      "description": "Start screenshot capture"
-    }
-  }
+    "js": ["contentScript.js"]
+  }]
 }
