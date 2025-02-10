@@ -18,6 +18,9 @@ export default defineConfig({
         fs.copyFileSync('public/manifest.json', 'dist/manifest.json');
         fs.copyFileSync('public/icon.svg', 'dist/icon.svg');
         
+        // Copy and rename index.html to popup.html
+        fs.copyFileSync('dist/index.html', 'dist/popup.html');
+        
         // Move CSS file to correct location
         if (fs.existsSync('dist/assets/contentStyle.css')) {
           fs.renameSync('dist/assets/contentStyle.css', 'dist/content.css');
@@ -40,16 +43,21 @@ export default defineConfig({
         background: resolve(__dirname, 'src/background.ts'),
         contentStyle: resolve(__dirname, 'src/content.css')
       },
-      output: {
-        entryFileNames: '[name].js',
-        chunkFileNames: 'assets/[name].[hash].js',
-        assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'style.css') {
+      output: [
+        {
+          // ES module build for content script and popup
+          entryFileNames: '[name].js',
+          chunkFileNames: 'assets/[name].[hash].js',
+          format: 'es',
+          assetFileNames: (assetInfo) => {
+            if (assetInfo.name === 'style.css') {
+              return 'assets/[name].[ext]';
+            }
             return 'assets/[name].[ext]';
           }
-          return 'assets/[name].[ext]';
         }
-      }
-    }
+      ]
+    },
+    target: 'esnext'
   }
 });

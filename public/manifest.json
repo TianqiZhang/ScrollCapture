@@ -3,9 +3,16 @@
   "name": "ScrollCapture",
   "version": "1.0",
   "description": "Advanced scrolling screenshot capture extension",
-  "permissions": ["activeTab", "scripting", "storage"],
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "tabs",
+    "downloads",
+    "notifications"
+  ],
   "action": {
-    "default_popup": "index.html"
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"
@@ -15,6 +22,7 @@
   },
   "content_scripts": [{
     "matches": ["<all_urls>"],
-    "js": ["contentScript.js"]
+    "js": ["content.js"],
+    "css": ["content.css"]
   }]
 }

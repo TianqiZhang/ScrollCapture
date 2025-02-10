@@ -1,14 +1,23 @@
-import React, { useState } from 'react';
-import { Camera, Settings, Image as ImageIcon } from 'lucide-react';
+import { useState } from 'react';
+import { Camera, Image as ImageIcon } from 'lucide-react';
 
 function Popup() {
   const [quality, setQuality] = useState(90);
   const [format, setFormat] = useState('png');
 
-  const startCapture = () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.sendMessage(tabs[0].id!, { action: 'startCapture', settings: { quality, format } });
-    });
+  const startCapture = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (tab?.id) {
+        await chrome.tabs.sendMessage(tab.id, { 
+          action: 'startCapture', 
+          settings: { quality, format } 
+        });
+        window.close();
+      }
+    } catch (err) {
+      console.error('Failed to start capture:', err);
+    }
   };
 
   return (

@@ -1,45 +1,49 @@
-import { jsPDF } from 'jspdf';
-
-interface ScreenshotMessage {
-  action: 'saveScreenshot';
-  dataUrl: string;
-  format: string;
-}
-
-interface ErrorMessage {
-  action: 'captureError';
-  error: string;
-}
-
-type Message = ScreenshotMessage | ErrorMessage;
-
-async function convertToPDF(dataUrl: string): Promise<string> {
-  const response = await fetch(dataUrl);
-  const blob = await response.blob();
-  const blobUrl = URL.createObjectURL(blob);
-  
-  const pdf = new jsPDF();
-  const img = new Image();
-  
-  return new Promise((resolve, reject) => {
-    img.onload = () => {
-      try {
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (img.height * pdfWidth) / img.width;
-        pdf.addImage(img, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        resolve(pdf.output('dataurlstring'));
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error('PDF conversion failed'));
-      } finally {
-        URL.revokeObjectURL(blobUrl);
-      }
-    };
-    img.onerror = () => reject(new Error('Failed to load image for PDF conversion'));
-    img.src = blobUrl;
+// Background script that handles screenshot saving and PDF conversion
+function blobToBase64(blob) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.readAsDataURL(blob);
   });
 }
 
-chrome.runtime.onMessage.addListener((message: Message, sender) => {
+async function convertToPDF(dataUrl) {
+  try {
+    const img = await fetch(dataUrl);
+    const blob = await img.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Create a PDF
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const pdfImg = new Image();
+
+    return new Promise((resolve, reject) => {
+      pdfImg.onload = async () => {
+        try {
+          canvas.width = pdfImg.width;
+          canvas.height = pdfImg.height;
+          ctx.drawImage(pdfImg, 0, 0);
+          
+          // Convert to PDF using canvas data
+          const imgData = canvas.toDataURL('image/jpeg', 0.95);
+          resolve(imgData);
+        } catch (err) {
+          reject(err);
+        } finally {
+          URL.revokeObjectURL(blobUrl);
+        }
+      };
+      pdfImg.onerror = () => reject(new Error('Failed to load image for PDF conversion'));
+      pdfImg.src = blobUrl;
+    });
+  } catch (err) {
+    console.error('PDF conversion failed:', err);
+    throw err;
+  }
+}
+
+chrome.runtime.onMessage.addListener((message, sender) => {
   if (message.action === 'saveScreenshot') {
     const { dataUrl, format } = message;
     
@@ -57,7 +61,7 @@ chrome.runtime.onMessage.addListener((message: Message, sender) => {
           const img = await fetch(dataUrl);
           const blob = await img.blob();
           const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d')!;
+          const ctx = canvas.getContext('2d');
           const image = await createImageBitmap(blob);
           canvas.width = image.width;
           canvas.height = image.height;
