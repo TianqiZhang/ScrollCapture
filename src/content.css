@@ -29,3 +29,18 @@
   gap: 8px;
   z-index: 1000000;
 }
+
+.screenshot-progress {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 4px;
+  background: #3b82f6;
+  transition: width 0.3s ease;
+  z-index: 1000001;
+  text-align: center;
+  color: white;
+  font-size: 12px;
+  padding: 2px;
+}

@@ -1,3 +1,5 @@
+import html2canvas from 'html2canvas';
+
 interface CaptureFrame {
   dataUrl: string;
   position: { x: number; y: number };
@@ -9,6 +11,7 @@ class ScreenshotCapture {
   private selection: { x: number; y: number; width: number; height: number } | null = null;
   private overlay: HTMLDivElement | null = null;
   private selectionBox: HTMLDivElement | null = null;
+  private progressBar: HTMLDivElement | null = null;
 
   constructor() {
     this.initializeOverlay();
@@ -24,6 +27,20 @@ class ScreenshotCapture {
     this.selectionBox = document.createElement('div');
     this.selectionBox.className = 'screenshot-selection';
     this.overlay.appendChild(this.selectionBox);
+
+    // Add progress bar
+    this.progressBar = document.createElement('div');
+    this.progressBar.className = 'screenshot-progress';
+    this.progressBar.style.display = 'none';
+    document.body.appendChild(this.progressBar);
+  }
+
+  private updateProgress(percent: number) {
+    if (this.progressBar) {
+      this.progressBar.style.display = 'block';
+      this.progressBar.style.width = `${percent}%`;
+      this.progressBar.textContent = `Capturing: ${Math.round(percent)}%`;
+    }
   }
 
   private setupEventListeners() {
@@ -77,48 +94,67 @@ class ScreenshotCapture {
   private async captureFrame(): Promise<CaptureFrame> {
     if (!this.selection) throw new Error('No selection area defined');
 
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d')!;
-    const devicePixelRatio = window.devicePixelRatio;
-
-    canvas.width = this.selection.width * devicePixelRatio;
-    canvas.height = this.selection.height * devicePixelRatio;
-
-    context.scale(devicePixelRatio, devicePixelRatio);
-
-    const scrollX = window.scrollX;
-    const scrollY = window.scrollY;
-
-    // Use html2canvas or browser.tabs.captureVisibleTab for actual capture
-    // This is a placeholder for the actual capture logic
-    const dataUrl = canvas.toDataURL();
+    // Calculate the area to capture
+    const targetElement = document.documentElement;
+    const scale = window.devicePixelRatio;
+    
+    const canvas = await html2canvas(targetElement, {
+      scale,
+      windowWidth: targetElement.scrollWidth,
+      windowHeight: targetElement.scrollHeight,
+      x: this.selection.x,
+      y: this.selection.y,
+      width: this.selection.width,
+      height: this.selection.height,
+      logging: false,
+      useCORS: true,
+      allowTaint: true
+    });
 
     return {
-      dataUrl,
-      position: { x: scrollX, y: scrollY }
+      dataUrl: canvas.toDataURL(),
+      position: { 
+        x: window.scrollX + this.selection.x,
+        y: window.scrollY + this.selection.y 
+      }
     };
   }
 
   private async startCapture() {
     this.isCapturing = true;
     this.frames = [];
+    
+    try {
+      if (!this.selection) throw new Error('No selection area defined');
 
-    const totalHeight = document.documentElement.scrollHeight;
-    const viewportHeight = window.innerHeight;
-    let currentScroll = 0;
+      const totalHeight = document.documentElement.scrollHeight;
+      const viewportHeight = window.innerHeight;
+      let currentScroll = 0;
 
-    while (currentScroll < totalHeight && this.isCapturing) {
-      const frame = await this.captureFrame();
-      this.frames.push(frame);
+      while (currentScroll < totalHeight && this.isCapturing) {
+        const progress = (currentScroll / totalHeight) * 100;
+        this.updateProgress(progress);
 
-      currentScroll += viewportHeight;
-      window.scrollTo(0, currentScroll);
+        const frame = await this.captureFrame();
+        this.frames.push(frame);
 
-      // Wait for any dynamic content to load
-      await new Promise(resolve => setTimeout(resolve, 100));
+        currentScroll += viewportHeight;
+        window.scrollTo(0, currentScroll);
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      this.updateProgress(100);
+      await this.stitchFrames();
+    } catch (err) {
+      console.error('Capture failed:', err);
+      chrome.runtime.sendMessage({
+        action: 'captureError',
+        error: err instanceof Error ? err.message : 'Unknown error occurred'
+      });
+    } finally {
+      this.cleanup();
     }
-
-    await this.stitchFrames();
   }
 
   private async stitchFrames() {
@@ -126,31 +162,51 @@ class ScreenshotCapture {
 
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d')!;
-    const devicePixelRatio = window.devicePixelRatio;
+    const scale = window.devicePixelRatio;
 
     // Calculate final dimensions
     const maxWidth = Math.max(...this.frames.map(f => f.position.x + this.selection!.width));
     const maxHeight = Math.max(...this.frames.map(f => f.position.y + this.selection!.height));
 
-    canvas.width = maxWidth * devicePixelRatio;
-    canvas.height = maxHeight * devicePixelRatio;
-    context.scale(devicePixelRatio, devicePixelRatio);
+    canvas.width = maxWidth * scale;
+    canvas.height = maxHeight * scale;
+    context.scale(scale, scale);
 
-    // Draw frames
+    // Draw frames in order
     for (const frame of this.frames) {
       const img = new Image();
       img.src = frame.dataUrl;
-      await new Promise(resolve => {
-        img.onload = resolve;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Failed to load frame'));
       });
-      context.drawImage(img, frame.position.x, frame.position.y);
+      
+      context.drawImage(
+        img,
+        frame.position.x,
+        frame.position.y,
+        this.selection!.width,
+        this.selection!.height
+      );
     }
 
     // Send final image to background script
     chrome.runtime.sendMessage({
       action: 'saveScreenshot',
-      dataUrl: canvas.toDataURL()
+      dataUrl: canvas.toDataURL(),
+      format: 'png' // Default format
     });
+  }
+
+  private cleanup() {
+    this.isCapturing = false;
+    if (this.overlay) {
+      this.overlay.style.display = 'none';
+    }
+    if (this.progressBar) {
+      this.progressBar.style.display = 'none';
+    }
+    window.scrollTo(0, 0);
   }
 
   public start() {

@@ -125,7 +125,7 @@ class ScrollCapture {
 
 // Initialize when message received from background
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.action === 'START_CAPTURE') {
+  if (message.action === 'startCapture') {
     new ScrollCapture();
   }
 });

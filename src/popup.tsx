@@ -12,15 +12,15 @@ function Popup() {
   };
 
   return (
-    <div className="w-64 p-4 bg-white">
-      <h1 className="text-lg font-bold mb-4 flex items-center gap-2">
-        <Camera className="w-5 h-5" />
+    <div className="w-[300px] min-h-[250px] p-6 bg-white">
+      <h1 className="text-xl font-bold mb-6 flex items-center gap-2 text-blue-600">
+        <Camera className="w-6 h-6" />
         Screenshot Capture
       </h1>
       
-      <div className="space-y-4">
-        <div className="space-y-2">
-          <label className="block text-sm font-medium">
+      <div className="space-y-6">
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700">
             Quality: {quality}%
           </label>
           <input
@@ -29,16 +29,16 @@ function Popup() {
             max="100"
             value={quality}
             onChange={(e) => setQuality(Number(e.target.value))}
-            className="w-full"
+            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-sm font-medium">Format</label>
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-gray-700">Format</label>
           <select
             value={format}
             onChange={(e) => setFormat(e.target.value)}
-            className="w-full p-1 border rounded"
+            className="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           >
             <option value="png">PNG</option>
             <option value="jpeg">JPEG</option>
@@ -48,11 +48,15 @@ function Popup() {
 
         <button
           onClick={startCapture}
-          className="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 flex items-center justify-center gap-2"
+          className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 font-medium"
         >
-          <ImageIcon className="w-4 h-4" />
+          <ImageIcon className="w-5 h-5" />
           Start Capture
         </button>
+
+        <p className="text-xs text-gray-500 text-center mt-4">
+          Press Ctrl+Shift+S (Cmd+Shift+S on Mac) to start capture
+        </p>
       </div>
     </div>
   );
