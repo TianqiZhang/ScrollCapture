@@ -9,15 +9,23 @@ export default defineConfig({
     {
       name: 'post-build',
       closeBundle: async () => {
-        // Copy manifest to dist
+        // Create dist directory if it doesn't exist
         if (!fs.existsSync('dist')) {
-          fs.mkdirSync('dist');
+          fs.mkdirSync('dist', { recursive: true });
         }
+
+        // Copy manifest and icon to dist
         fs.copyFileSync('public/manifest.json', 'dist/manifest.json');
+        fs.copyFileSync('public/icon.svg', 'dist/icon.svg');
         
         // Move CSS file to correct location
         if (fs.existsSync('dist/assets/contentStyle.css')) {
           fs.renameSync('dist/assets/contentStyle.css', 'dist/content.css');
+        }
+
+        // Create icons directory
+        if (!fs.existsSync('dist/icons')) {
+          fs.mkdirSync('dist/icons', { recursive: true });
         }
       }
     }
